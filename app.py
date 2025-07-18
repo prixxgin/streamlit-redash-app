@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-import altair as alt  # 🔁 Add this import
+import altair as alt
 
 # --- Load secrets from .streamlit/secrets.toml ---
 REDASH_URL = st.secrets["redash"]["url"]
@@ -21,12 +21,13 @@ def get_saved_queries():
         st.error("Failed to fetch saved queries.")
         return []
 
-st.title("🔍 Redash Query Viewer")
+st.title("📊 Redash Query Explorer")
 
 queries = get_saved_queries()
 if not queries:
     st.stop()
 
+# Query selection
 query_options = {q["name"]: q["id"] for q in queries}
 query_name = st.selectbox("Select a Query", list(query_options.keys()))
 selected_query_id = query_options[query_name]
@@ -38,25 +39,32 @@ if st.button("Run Query"):
         if r.status_code == 200:
             data = r.json()["query_result"]["data"]["rows"]
             df = pd.DataFrame(data)
-            st.success("Query successful!")
-            st.dataframe(df)
 
-            # 🔻 Chart Section (Optional: Only render if numeric columns exist)
-            numeric_columns = df.select_dtypes(include=['number']).columns.tolist()
-            if numeric_columns:
-                x_axis = st.selectbox("Choose X-axis", df.columns)
-                y_axis = st.selectbox("Choose Y-axis", numeric_columns)
-                chart = alt.Chart(df).mark_bar().encode(
-                    x=alt.X(x_axis, sort="-y"),
-                    y=y_axis,
-                    tooltip=[x_axis, y_axis]
-                ).interactive()
-                st.altair_chart(chart, use_container_width=True)
+            if df.empty:
+                st.warning("No data returned from this query.")
             else:
-                st.info("No numeric data to plot.")
+                st.success("Query executed successfully!")
+                st.dataframe(df)
 
-            # CSV Export
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button("📥 Download as CSV", csv, file_name="result.csv")
+                # --- Chart: Count per Granular Status ---
+                if "granular_status" in df.columns:
+                    status_counts = df["granular_status"].value_counts().reset_index()
+                    status_counts.columns = ["granular_status", "count"]
+
+                    chart = alt.Chart(status_counts).mark_bar().encode(
+                        x=alt.X("granular_status:N", sort="-y"),
+                        y="count:Q",
+                        tooltip=["granular_status", "count"]
+                    ).properties(
+                        title="Granular Status Count"
+                    ).interactive()
+
+                    st.altair_chart(chart, use_container_width=True)
+                else:
+                    st.info("No 'granular_status' column found to plot.")
+
+                # --- CSV Download ---
+                csv = df.to_csv(index=False).encode("utf-8")
+                st.download_button("📥 Download CSV", csv, file_name="query_results.csv")
         else:
-            st.error("Query execution failed.")
+            st.error("Failed to run query.")
