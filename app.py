@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
 
-# --- Redash Configuration ---
-REDASH_URL = "https://redash-ph.ninjavan.co"  # Replace with your Redash URL
-API_KEY = st.secrets["NwAJMjjxsgVpHH6fATD7dajZrL2yXECJCmvqmHMY"]
+# --- Load secrets from .streamlit/secrets.toml ---
+REDASH_URL = st.secrets["redash"]["url"]
+API_KEY = st.secrets["redash"]["api_key"]
 
 headers = {
     "Authorization": f"Key {API_KEY}"
@@ -27,7 +26,7 @@ queries = get_saved_queries()
 if not queries:
     st.stop()
 
-query_options = {q["ZARA Delivery Report"]: q["2724"] for q in queries}
+query_options = {q["name"]: q["id"] for q in queries}
 query_name = st.selectbox("Select a Query", list(query_options.keys()))
 selected_query_id = query_options[query_name]
 
