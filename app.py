@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import altair as alt  # 🔁 Add this import
 
 # --- Load secrets from .streamlit/secrets.toml ---
 REDASH_URL = st.secrets["redash"]["url"]
@@ -40,6 +41,21 @@ if st.button("Run Query"):
             st.success("Query successful!")
             st.dataframe(df)
 
+            # 🔻 Chart Section (Optional: Only render if numeric columns exist)
+            numeric_columns = df.select_dtypes(include=['number']).columns.tolist()
+            if numeric_columns:
+                x_axis = st.selectbox("Choose X-axis", df.columns)
+                y_axis = st.selectbox("Choose Y-axis", numeric_columns)
+                chart = alt.Chart(df).mark_bar().encode(
+                    x=alt.X(x_axis, sort="-y"),
+                    y=y_axis,
+                    tooltip=[x_axis, y_axis]
+                ).interactive()
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.info("No numeric data to plot.")
+
+            # CSV Export
             csv = df.to_csv(index=False).encode("utf-8")
             st.download_button("📥 Download as CSV", csv, file_name="result.csv")
         else:
