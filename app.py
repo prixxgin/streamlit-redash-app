@@ -14,7 +14,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gsheets"], 
 client = gspread.authorize(creds)
 
 # Open the sheet
-SHEET_NAME = "Your Sheet Name Here"  # Change this to your Google Sheet title
+SHEET_NAME = "raw"  # Change this to your Google Sheet title
 sheet = client.open(SHEET_NAME).sheet1
 
 # Fetch all records
