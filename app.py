@@ -4,22 +4,17 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 st.title("📊 Google Sheets Data Viewer")
 
-# Define the scopes
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-# Load credentials from Streamlit secrets
 creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gsheets"], scope)
-
-# Authorize the client
 client = gspread.authorize(creds)
 
-# Open the sheet
-SHEET_NAME = "raw"  # Change this to your Google Sheet title
-sheet = client.open(SHEET_NAME).sheet1
+# ✅ Sheet name must match exactly what you see in Google Sheets
+SHEET_NAME = "raw"
 
-# Fetch all records
-data = sheet.get_all_records()
-
-# Display in Streamlit
-st.write("📄 Sheet Contents:")
-st.dataframe(data)
+try:
+    sheet = client.open(SHEET_NAME).sheet1
+    data = sheet.get_all_records()
+    st.dataframe(data)
+except Exception as e:
+    st.error(f"❌ Error: {e}")
