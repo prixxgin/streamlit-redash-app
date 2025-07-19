@@ -6,7 +6,7 @@ import altair as alt
 # --- Load secrets from .streamlit/secrets.toml ---
 REDASH_URL = st.secrets["redash"]["url"]
 API_KEY = st.secrets["redash"]["api_key"]
-QUERY_ID = st.secrets["redash"]["query_id"]
+
 
 headers = {
     "Authorization": f"Key {API_KEY}"
