@@ -22,25 +22,23 @@ def run_query():
         data = r.json()["query_result"]["data"]["rows"]
         return pd.DataFrame(data)
     else:
-        st.error("Failed to run query.")
+        st.error("❌ Failed to run query.")
         return pd.DataFrame()
 
-# --- Run the query automatically
+# --- Run query on load
 df = run_query()
 
 if df.empty:
     st.warning("No data returned from Redash.")
     st.stop()
 
-# --- Filter: Tracking ID
+# --- Filter: Manual input for tracking_id
 if "tracking_id" in df.columns:
-    unique_tracking_ids = df["tracking_id"].dropna().unique()
-    selected_tracking_ids = st.multiselect("Filter by Tracking ID", sorted(unique_tracking_ids))
+    tracking_input = st.text_input("🔍 Enter Tracking ID (partial or full)")
+    if tracking_input:
+        df = df[df["tracking_id"].astype(str).str.contains(tracking_input, case=False, na=False)]
 
-    if selected_tracking_ids:
-        df = df[df["tracking_id"].isin(selected_tracking_ids)]
-
-# --- Show filtered data
+# --- Show filtered results
 st.dataframe(df)
 
 # --- Chart: Count per Granular Status
@@ -58,8 +56,8 @@ if "granular_status" in df.columns:
 
     st.altair_chart(chart, use_container_width=True)
 else:
-    st.info("No 'granular_status' column found to plot.")
+    st.info("ℹ️ No 'granular_status' column found to plot.")
 
-# --- CSV Download
+# --- Download CSV
 csv = df.to_csv(index=False).encode("utf-8")
 st.download_button("📥 Download CSV", csv, file_name="query_results.csv")
