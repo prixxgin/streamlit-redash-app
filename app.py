@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import altair as alt
 
-# --- Load secrets from .streamlit/secrets.toml ---
+# --- Load Redash config from .streamlit/secrets.toml ---
 REDASH_URL = st.secrets["redash"]["url"]
 API_KEY = st.secrets["redash"]["api_key"]
 QUERY_ID = st.secrets["redash"]["query_id"]
@@ -22,26 +22,21 @@ def run_query():
         data = r.json()["query_result"]["data"]["rows"]
         return pd.DataFrame(data)
     else:
-        st.error("❌ Failed to run query.")
+        st.error(f"❌ Failed to run query. Status code: {r.status_code}")
+        st.text(f"Response: {r.text}")
         return pd.DataFrame()
 
-# --- Run query on load
+# --- Run query
 df = run_query()
 
 if df.empty:
     st.warning("No data returned from Redash.")
     st.stop()
 
-# --- Filter: Manual input for tracking_id
-if "tracking_id" in df.columns:
-    tracking_input = st.text_input("🔍 Enter Tracking ID (partial or full)")
-    if tracking_input:
-        df = df[df["tracking_id"].astype(str).str.contains(tracking_input, case=False, na=False)]
-
-# --- Show filtered results
+# --- Display table
 st.dataframe(df)
 
-# --- Chart: Count per Granular Status
+# --- Chart: Count per Granular Status (if exists)
 if "granular_status" in df.columns:
     status_counts = df["granular_status"].value_counts().reset_index()
     status_counts.columns = ["granular_status", "count"]
@@ -55,9 +50,7 @@ if "granular_status" in df.columns:
     ).interactive()
 
     st.altair_chart(chart, use_container_width=True)
-else:
-    st.info("ℹ️ No 'granular_status' column found to plot.")
 
-# --- Download CSV
+# --- CSV download
 csv = df.to_csv(index=False).encode("utf-8")
 st.download_button("📥 Download CSV", csv, file_name="query_results.csv")
