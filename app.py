@@ -8,35 +8,15 @@ REDASH_URL = st.secrets["redash"]["url"]
 API_KEY = st.secrets["redash"]["api_key"]
 QUERY_ID = st.secrets["redash"]["query_id"]
 
-
 headers = {
     "Authorization": f"Key {API_KEY}"
 }
 
-@st.cache_data
-def get_saved_queries():
-    url = f"{REDASH_URL}/api/queries"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()["results"]
-    else:
-        st.error("Failed to fetch saved queries.")
-        return []
-
-st.title("📊 Redash Query Explorer")
-
-queries = get_saved_queries()
-if not queries:
-    st.stop()
-
-# Query selection
-query_options = {q["name"]: q["id"] for q in queries}
-query_name = st.selectbox("Select a Query", list(query_options.keys()))
-selected_query_id = query_options[query_name]
+st.title("📊 Redash Query Viewer")
 
 if st.button("Run Query"):
     with st.spinner("Running query..."):
-        exec_url = f"{REDASH_URL}/api/queries/{selected_query_id}/results"
+        exec_url = f"{REDASH_URL}/api/queries/{QUERY_ID}/results"
         r = requests.get(exec_url, headers=headers)
         if r.status_code == 200:
             data = r.json()["query_result"]["data"]["rows"]
