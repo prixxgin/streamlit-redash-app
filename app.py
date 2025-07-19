@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import requests
+import time
 import altair as alt
 
-# --- Load Redash config from .streamlit/secrets.toml ---
+# --- Load Redash config from secrets ---
 REDASH_URL = st.secrets["redash"]["url"]
 API_KEY = st.secrets["redash"]["api_key"]
 QUERY_ID = st.secrets["redash"]["query_id"]
@@ -16,15 +17,39 @@ st.title("📊 Redash Query Viewer")
 
 @st.cache_data(ttl=300)
 def run_query():
-    exec_url = f"{REDASH_URL}/api/queries/{QUERY_ID}/results"
-    r = requests.get(exec_url, headers=headers)
-    if r.status_code == 200:
-        data = r.json()["query_result"]["data"]["rows"]
-        return pd.DataFrame(data)
-    else:
-        st.error(f"❌ Failed to run query. Status code: {r.status_code}")
-        st.text(f"Response: {r.text}")
+    # Step 1: Trigger the query to run
+    refresh_url = f"{REDASH_URL}/api/queries/{QUERY_ID}/refresh"
+    response = requests.post(refresh_url, headers=headers)
+
+    if response.status_code != 200:
+        st.error(f"❌ Failed to trigger query. Status code: {response.status_code}")
+        st.text(f"Response: {response.text}")
         return pd.DataFrame()
+
+    job_id = response.json()["job"]["id"]
+
+    # Step 2: Poll for query completion
+    job_url = f"{REDASH_URL}/api/jobs/{job_id}"
+    max_retries = 30
+    for _ in range(max_retries):
+        job_response = requests.get(job_url, headers=headers).json()
+        status = job_response["job"]["status"]
+
+        if status == 3:
+            # Query succeeded
+            result_id = job_response["job"]["query_result_id"]
+            result_url = f"{REDASH_URL}/api/query_results/{result_id}"
+            result_response = requests.get(result_url, headers=headers).json()
+            data = result_response["query_result"]["data"]["rows"]
+            return pd.DataFrame(data)
+        elif status == 4:
+            st.error("❌ Query failed to execute.")
+            return pd.DataFrame()
+        else:
+            time.sleep(1)  # wait 1 second before polling again
+
+    st.error("⏰ Query timed out.")
+    return pd.DataFrame()
 
 # --- Run query
 df = run_query()
