@@ -1,22 +1,41 @@
 import streamlit as st
 import gspread
+import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
 
-st.title("📊 Google Sheets Data Viewer")
+st.set_page_config(page_title="📊 Live GSheet Dashboard", layout="wide")
 
+# --- Title
+st.title("📊 Google Sheets Live Dashboard")
+
+# --- Setup GSheet credentials
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-# ✅ Load credentials from secrets
 creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gsheets"], scope)
-
-# ✅ Authorize client
 client = gspread.authorize(creds)
 
-# ✅ Open your sheet
-SHEET_NAME = "raw"  # 👈 use the **tab name** in your spreadsheet
-sheet = client.open(SHEET_NAME).sheet1
+# --- Open the sheet
+SHEET_URL = st.secrets["gsheets"]["sheet_url"]
+spreadsheet = client.open_by_url(SHEET_URL)
+worksheet = spreadsheet.sheet1
 
-# ✅ Read and show data
-data = sheet.get_all_records()
-st.write("📄 Sheet Contents:")
-st.dataframe(data)
+# --- Convert to DataFrame
+@st.cache_data(ttl=60)  # Refresh every 60 seconds
+def load_data():
+    records = worksheet.get_all_records()
+    df = pd.DataFrame(records)
+    return df
+
+df = load_data()
+
+# --- Display
+st.subheader("📄 Sheet Data")
+st.dataframe(df, use_container_width=True)
+
+# --- Optional Chart
+if not df.empty:
+    numeric_cols = df.select_dtypes(include='number').columns.tolist()
+    if numeric_cols:
+        st.subheader("📈 Chart (first numeric column)")
+        st.line_chart(df[numeric_cols[0]])
+
+st.caption("⏱️ Data refreshes every 60 seconds. Click **Rerun** to force refresh.")
