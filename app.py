@@ -15,20 +15,28 @@ if "gsheets" in st.secrets:
     st.success('✅ Connected to Google Sheets!')
 
     try:
-        # Open the spreadsheet and worksheet
         spreadsheet = client.open("MyData")
         worksheet = spreadsheet.worksheet("raw")
-        
-        # Get all data
+
         data = worksheet.get_all_values()
         df = pd.DataFrame(data)
 
-        # Use the first row as column headers and remove it from data
+        # Use first row as header
         df.columns = df.iloc[0]
-        df = df[1:].reset_index(drop=True)
+        df = df.drop(df.index[0])
 
-        st.subheader("📄 Sheet: raw (without row & column numbers)")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        # Let user pick which columns to show
+        selected_columns = st.multiselect(
+            "🧩 Select columns to display:",
+            options=df.columns.tolist(),
+            default=df.columns.tolist()  # preselect all by default
+        )
+
+        # Filter the dataframe based on selection
+        filtered_df = df[selected_columns]
+
+        st.subheader("📄 Filtered Sheet View")
+        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"❌ Error reading spreadsheet: {e}")
 else:
