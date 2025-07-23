@@ -23,20 +23,17 @@ if "gsheets" in st.secrets:
 
         # Use first row as header
         df.columns = df.iloc[0]
-        df = df.drop(df.index[0])
+        df = df.drop(df.index[0]).reset_index(drop=True)
 
-        # Let user pick which columns to show
-        selected_columns = st.multiselect(
-            "🧩 Select columns to display:",
-            options=df.columns.tolist(),
-            default=df.columns.tolist()  # preselect all by default
+        # Dropdown selector using headers
+        selected_column = st.selectbox(
+            "🔽 Select a column to display:",
+            options=df.columns.tolist()
         )
 
-        # Filter the dataframe based on selection
-        filtered_df = df[selected_columns]
-
-        st.subheader("📄 Filtered Sheet View")
-        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+        # Display selected column
+        st.subheader(f"📄 Column: {selected_column}")
+        st.dataframe(df[[selected_column]], use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"❌ Error reading spreadsheet: {e}")
 else:
