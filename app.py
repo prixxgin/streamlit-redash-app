@@ -15,16 +15,16 @@ if "gsheets" in st.secrets:
     st.success('✅ Connected to Google Sheets!')
 
     try:
-        # Open the spreadsheet and specific worksheet
-        spreadsheet = client.open("MyData")  # Replace with your spreadsheet name
-        worksheet = spreadsheet.worksheet("raw")  # Replace with your sheet/tab name
+        # Open the spreadsheet and worksheet
+        spreadsheet = client.open("MyData")
+        worksheet = spreadsheet.worksheet("raw")
         
-        # Get all values and convert to DataFrame
+        # Get all data from the sheet (including duplicate headers)
         data = worksheet.get_all_values()
-        df = pd.DataFrame(data[1:], columns=data[0])  # Use first row as header
-        
-        st.subheader("📄 Sheet: raw")
-        st.dataframe(df)  # Display as interactive table
+        df = pd.DataFrame(data)  # Do not use headers
+
+        st.subheader("📄 Sheet: raw (with original headers)")
+        st.dataframe(df)
     except Exception as e:
         st.error(f"❌ Error reading spreadsheet: {e}")
 else:
