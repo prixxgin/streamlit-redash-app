@@ -21,19 +21,22 @@ if "gsheets" in st.secrets:
         data = worksheet.get_all_values()
         df = pd.DataFrame(data)
 
-        # Use first row as header
+        # Use the first row as header
         df.columns = df.iloc[0]
         df = df.drop(df.index[0]).reset_index(drop=True)
 
-        # Dropdown selector using headers
-        selected_column = st.selectbox(
-            "🔽 Select a column to display:",
-            options=df.columns.tolist()
+        # Multi-select dropdown with column headers
+        selected_columns = st.multiselect(
+            "🔽 Select one or more columns to display:",
+            options=df.columns.tolist(),
+            default=df.columns.tolist()  # Select all by default
         )
 
-        # Display selected column
-        st.subheader(f"📄 Column: {selected_column}")
-        st.dataframe(df[[selected_column]], use_container_width=True, hide_index=True)
+        if selected_columns:
+            st.subheader("📄 Selected Columns View")
+            st.dataframe(df[selected_columns], use_container_width=True, hide_index=True)
+        else:
+            st.info("☝️ Please select at least one column to view the data.")
     except Exception as e:
         st.error(f"❌ Error reading spreadsheet: {e}")
 else:
