@@ -25,16 +25,28 @@ if "gsheets" in st.secrets:
         df.columns = df.iloc[0]
         df = df.drop(df.index[0]).reset_index(drop=True)
 
+        # Ensure proper data types (convert numeric columns if possible)
+        df = df.apply(pd.to_numeric, errors='ignore')
+
         # Multi-select dropdown with column headers
         selected_columns = st.multiselect(
             "🔽 Select one or more columns to display:",
             options=df.columns.tolist(),
-            default=df.columns.tolist()  # Select all by default
+            default=df.columns.tolist()
         )
 
         if selected_columns:
             st.subheader("📄 Selected Columns View")
             st.dataframe(df[selected_columns], use_container_width=True, hide_index=True)
+
+            # Aggregation based on the first column
+            first_col = df.columns[0]
+            st.subheader(f"🧮 Aggregated View (Grouped by '{first_col}')")
+
+            # Example aggregation: count of rows per group + mean for numeric columns
+            aggregated_df = df.groupby(first_col).agg(['count', 'mean']).reset_index()
+
+            st.dataframe(aggregated_df, use_container_width=True, hide_index=True)
         else:
             st.info("☝️ Please select at least one column to view the data.")
     except Exception as e:
