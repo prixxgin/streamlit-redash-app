@@ -19,12 +19,16 @@ if "gsheets" in st.secrets:
         spreadsheet = client.open("MyData")
         worksheet = spreadsheet.worksheet("raw")
         
-        # Get all data from the sheet (including duplicate headers)
+        # Get all data
         data = worksheet.get_all_values()
-        df = pd.DataFrame(data)  # Do not use headers
+        df = pd.DataFrame(data)
 
-        st.subheader("📄 Sheet: raw (with original headers)")
-        st.dataframe(df)
+        # Use the first row as column headers and remove it from data
+        df.columns = df.iloc[0]
+        df = df[1:].reset_index(drop=True)
+
+        st.subheader("📄 Sheet: raw (without row & column numbers)")
+        st.dataframe(df, use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"❌ Error reading spreadsheet: {e}")
 else:
