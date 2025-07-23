@@ -16,7 +16,7 @@ if "gsheets" in st.secrets:
 
     # Example: List all spreadsheets
     try:
-        spreadsheet = client.open("Your Google Sheet Name")  # Replace with your actual sheet name
+        spreadsheet = client.open("MyData")  # Replace with your actual sheet name
         st.write(f"Opened spreadsheet: {spreadsheet.title}")
         worksheet_list = spreadsheet.worksheets()
         st.write("Worksheets:", [ws.title for ws in worksheet_list])
