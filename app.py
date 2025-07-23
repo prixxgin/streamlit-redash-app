@@ -41,4 +41,4 @@ if not df.empty:
         st.subheader("📈 Chart (first numeric column)")
         st.line_chart(df[numeric_cols[0]])
 
-st.caption("⏱️ Auto
+st.caption("⏱️ Auto-refreshes every 60 seconds. You can still click 'Rerun' to manually refresh.")
