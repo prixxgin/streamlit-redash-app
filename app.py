@@ -15,9 +15,12 @@ if "gsheets" in st.secrets:
     st.success('Connected to Google Sheets!')
 
     # Example: List all spreadsheets
-    spreadsheets = client.openall()
-    st.write('Your spreadsheets:')
-    for sheet in spreadsheets:
-        st.write(sheet.title)
+    try:
+        spreadsheet = client.open("Your Google Sheet Name")  # Replace with your actual sheet name
+        st.write(f"Opened spreadsheet: {spreadsheet.title}")
+        worksheet_list = spreadsheet.worksheets()
+        st.write("Worksheets:", [ws.title for ws in worksheet_list])
+    except Exception as e:
+        st.error(f"Error opening spreadsheet: {e}")
 else:
     st.warning('Google Sheets credentials not found in Streamlit secrets.') 
