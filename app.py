@@ -1,10 +1,10 @@
 import streamlit as st
 import gspread
+import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
 
-st.title('Google Sheets Dashboard')
-
-st.write('This app connects to Google Sheets and displays data.')
+st.title('📊 Google Sheets Dashboard')
+st.write('This app connects to Google Sheets and displays data from the "raw" sheet.')
 
 # Use Streamlit secrets for credentials
 if "gsheets" in st.secrets:
@@ -12,15 +12,20 @@ if "gsheets" in st.secrets:
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         st.secrets["gsheets"], scope)
     client = gspread.authorize(creds)
-    st.success('Connected to Google Sheets!')
+    st.success('✅ Connected to Google Sheets!')
 
-    # Example: List all spreadsheets
     try:
-        spreadsheet = client.open("MyData")  # Replace with your actual sheet name
-        st.write(f"Opened spreadsheet: {spreadsheet.title}")
-        worksheet_list = spreadsheet.worksheets()
-        st.write("Worksheets:", [ws.title for ws in worksheet_list])
+        # Open the spreadsheet and specific worksheet
+        spreadsheet = client.open("MyData")  # Replace with your spreadsheet name
+        worksheet = spreadsheet.worksheet("raw")  # Replace with your sheet/tab name
+        
+        # Get all values and convert to DataFrame
+        data = worksheet.get_all_values()
+        df = pd.DataFrame(data[1:], columns=data[0])  # Use first row as header
+        
+        st.subheader("📄 Sheet: raw")
+        st.dataframe(df)  # Display as interactive table
     except Exception as e:
-        st.error(f"Error opening spreadsheet: {e}")
+        st.error(f"❌ Error reading spreadsheet: {e}")
 else:
-    st.warning('Google Sheets credentials not found in Streamlit secrets.') 
+    st.warning('⚠️ Google Sheets credentials not found in Streamlit secrets.')
