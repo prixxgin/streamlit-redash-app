@@ -39,17 +39,15 @@ if "gsheets" in st.secrets:
             st.subheader("📄 Selected Columns View")
             st.dataframe(selected_df, use_container_width=True, hide_index=True)
 
-            # Select group-by column
+            # Select group-by column (from selected columns)
             group_by_col = st.selectbox(
                 "📌 Choose column to group by:",
                 options=selected_columns,
                 index=0
             )
 
-            # Find numeric columns in the selected_df
-            numeric_options = selected_df.select_dtypes(include='number').columns.tolist()
-
-            # Let user choose multiple columns to sum
+            # Use numeric columns from the full dataframe (not limited to selected)
+            numeric_options = df.select_dtypes(include='number').columns.tolist()
             sum_columns = st.multiselect(
                 "➕ Select one or more numeric columns to sum:",
                 options=[col for col in numeric_options if col != group_by_col]
@@ -57,7 +55,7 @@ if "gsheets" in st.secrets:
 
             if sum_columns:
                 st.subheader(f"🧮 Sum View (Grouped by '{group_by_col}')")
-                sum_df = selected_df.groupby(group_by_col)[sum_columns].sum().reset_index()
+                sum_df = df.groupby(group_by_col)[sum_columns].sum().reset_index()
                 st.dataframe(sum_df, use_container_width=True, hide_index=True)
             else:
                 st.info("ℹ️ Please select at least one numeric column to sum.")
