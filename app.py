@@ -2,6 +2,7 @@ import streamlit as st
 import gspread
 import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
+import plotly.express as px
 
 st.title('📊 Google Sheets Dashboard')
 st.write('This app connects to Google Sheets and displays data from the "raw" sheet.')
@@ -20,7 +21,7 @@ if "gsheets" in st.secrets:
         data = worksheet.get_all_values()
         df = pd.DataFrame(data)
 
-        # Use the first row as header
+        # Use first row as header
         df.columns = df.iloc[0]
         df = df.drop(df.index[0]).reset_index(drop=True)
 
@@ -66,6 +67,37 @@ if "gsheets" in st.secrets:
                     st.subheader(f"🧮 Sum View (Grouped by {', '.join(group_by_cols)})")
                     sum_df = df.groupby(group_by_cols)[sum_columns].sum().reset_index()
                     st.dataframe(sum_df, use_container_width=True, hide_index=True)
+
+                    # ✅ Charting options
+                    st.subheader("📊 Graph Representation")
+
+                    chart_type = st.selectbox(
+                        "📍 Choose a chart type:",
+                        ["Bar", "Line", "Area", "Scatter"]
+                    )
+
+                    x_axis = st.selectbox(
+                        "➡️ Select X-axis (must be one of the group-by columns):",
+                        options=group_by_cols
+                    )
+
+                    y_axis = st.selectbox(
+                        "⬆️ Select Y-axis (must be one of the summed columns):",
+                        options=sum_columns
+                    )
+
+                    # Render chart based on selection
+                    if chart_type == "Bar":
+                        fig = px.bar(sum_df, x=x_axis, y=y_axis, title=f"{chart_type} Chart")
+                    elif chart_type == "Line":
+                        fig = px.line(sum_df, x=x_axis, y=y_axis, title=f"{chart_type} Chart")
+                    elif chart_type == "Area":
+                        fig = px.area(sum_df, x=x_axis, y=y_axis, title=f"{chart_type} Chart")
+                    elif chart_type == "Scatter":
+                        fig = px.scatter(sum_df, x=x_axis, y=y_axis, title=f"{chart_type} Chart")
+
+                    st.plotly_chart(fig, use_container_width=True)
+
             else:
                 st.info("ℹ️ Please select at least one column to group by and one column to sum.")
         else:
