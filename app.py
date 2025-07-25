@@ -41,17 +41,12 @@ if "gsheets" in st.secrets:
 
             # Aggregation using the first selected column
             first_col = selected_columns[0]
-            st.subheader(f"🧮 Aggregated View (Grouped by '{first_col}')")
+            st.subheader(f"🧮 Count View (Grouped by '{first_col}')")
 
-            # Filter numeric columns for aggregation, excluding the first_col
-            numeric_cols = selected_df.select_dtypes(include='number').columns.tolist()
-            numeric_cols = [col for col in numeric_cols if col != first_col]
+            # Group and count entries per value in the first selected column
+            count_df = selected_df.groupby(first_col).size().reset_index(name='Count')
 
-            if numeric_cols:
-                aggregated_df = selected_df.groupby(first_col)[numeric_cols].agg(['count', 'mean']).reset_index()
-                st.dataframe(aggregated_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("ℹ️ No numeric columns selected for aggregation.")
+            st.dataframe(count_df, use_container_width=True, hide_index=True)
         else:
             st.info("☝️ Please select at least one column to view the data.")
     except Exception as e:
