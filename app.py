@@ -66,6 +66,23 @@ if "gsheets" in st.secrets:
                     st.subheader(f"🧮 Sum View (Grouped by {', '.join(group_by_cols)})")
                     sum_df = df.groupby(group_by_cols)[sum_columns].sum().reset_index()
                     st.dataframe(sum_df, use_container_width=True, hide_index=True)
+
+                    # 📊 Chart Section
+                    st.subheader("📈 Visualization")
+                    chart_type = st.selectbox("Select chart type:", ["Bar", "Line", "Area"])
+                    x_axis = st.selectbox("🔸 X-axis column:", group_by_cols)
+                    y_axis = st.multiselect("🔹 Y-axis column(s):", sum_columns, default=sum_columns)
+
+                    if x_axis and y_axis:
+                        chart_data = sum_df[[x_axis] + y_axis].copy()
+                        chart_data = chart_data.set_index(x_axis)
+
+                        if chart_type == "Bar":
+                            st.bar_chart(chart_data)
+                        elif chart_type == "Line":
+                            st.line_chart(chart_data)
+                        elif chart_type == "Area":
+                            st.area_chart(chart_data)
             else:
                 st.info("ℹ️ Please select at least one column to group by and one column to sum.")
         else:
