@@ -27,7 +27,7 @@ if "gsheets" in st.secrets:
         # Convert possible numeric columns
         df = df.apply(pd.to_numeric, errors='ignore')
 
-        # Column selection
+        # Select columns to display
         selected_columns = st.multiselect(
             "🔽 Select columns to display:",
             options=df.columns.tolist(),
@@ -39,17 +39,19 @@ if "gsheets" in st.secrets:
             st.subheader("📄 Selected Columns View")
             st.dataframe(selected_df, use_container_width=True, hide_index=True)
 
-            # Choose group-by column
+            # Select group-by column
             group_by_col = st.selectbox(
                 "📌 Choose column to group by:",
                 options=selected_columns,
                 index=0
             )
 
-            # Choose which columns to sum
+            # Find numeric columns in the selected_df
             numeric_options = selected_df.select_dtypes(include='number').columns.tolist()
+
+            # Let user choose multiple columns to sum
             sum_columns = st.multiselect(
-                "➕ Select numeric columns to sum:",
+                "➕ Select one or more numeric columns to sum:",
                 options=[col for col in numeric_options if col != group_by_col]
             )
 
