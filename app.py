@@ -9,8 +9,7 @@ st.write('This app connects to Google Sheets and displays data from the "raw" sh
 # Use Streamlit secrets for credentials
 if "gsheets" in st.secrets:
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        st.secrets["gsheets"], scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gsheets"], scope)
     client = gspread.authorize(creds)
     st.success('✅ Connected to Google Sheets!')
 
@@ -25,10 +24,10 @@ if "gsheets" in st.secrets:
         df.columns = df.iloc[0]
         df = df.drop(df.index[0]).reset_index(drop=True)
 
-        # Ensure proper data types (convert numeric columns if possible)
+        # Convert possible numeric columns
         df = df.apply(pd.to_numeric, errors='ignore')
 
-        # Multi-select dropdown with column headers
+        # Multi-select column selection
         selected_columns = st.multiselect(
             "🔽 Select one or more columns to display:",
             options=df.columns.tolist(),
@@ -36,17 +35,23 @@ if "gsheets" in st.secrets:
         )
 
         if selected_columns:
+            selected_df = df[selected_columns]
             st.subheader("📄 Selected Columns View")
-            st.dataframe(df[selected_columns], use_container_width=True, hide_index=True)
+            st.dataframe(selected_df, use_container_width=True, hide_index=True)
 
-            # Aggregation based on the first column
-            first_col = df.columns[0]
+            # Aggregation using the first selected column
+            first_col = selected_columns[0]
             st.subheader(f"🧮 Aggregated View (Grouped by '{first_col}')")
 
-            # Example aggregation: count of rows per group + mean for numeric columns
-            aggregated_df = df.groupby(first_col).agg(['count', 'mean']).reset_index()
+            # Filter numeric columns for aggregation, excluding the first_col
+            numeric_cols = selected_df.select_dtypes(include='number').columns.tolist()
+            numeric_cols = [col for col in numeric_cols if col != first_col]
 
-            st.dataframe(aggregated_df, use_container_width=True, hide_index=True)
+            if numeric_cols:
+                aggregated_df = selected_df.groupby(first_col)[numeric_cols].agg(['count', 'mean']).reset_index()
+                st.dataframe(aggregated_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("ℹ️ No numeric columns selected for aggregation.")
         else:
             st.info("☝️ Please select at least one column to view the data.")
     except Exception as e:
