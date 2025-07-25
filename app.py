@@ -24,7 +24,7 @@ if "gsheets" in st.secrets:
         df.columns = df.iloc[0]
         df = df.drop(df.index[0]).reset_index(drop=True)
 
-        # Convert numeric-looking columns
+        # Convert numeric-like columns
         df = df.apply(pd.to_numeric, errors='ignore')
 
         # Select columns to display
@@ -39,21 +39,20 @@ if "gsheets" in st.secrets:
             st.subheader("📄 Selected Columns View")
             st.dataframe(selected_df, use_container_width=True, hide_index=True)
 
-            # Choose group-by column
-            group_by_col = st.selectbox(
-                "📌 Choose column to group by:",
-                options=df.columns.tolist(),
-                index=0
+            # ✅ MULTI group-by selection
+            group_by_cols = st.multiselect(
+                "📌 Choose one or more columns to group by:",
+                options=df.columns.tolist()
             )
 
-            # Choose columns to sum (all columns available)
+            # Columns to sum — all available
             sum_columns = st.multiselect(
                 "➕ Select one or more columns to sum:",
-                options=[col for col in df.columns if col != group_by_col]
+                options=[col for col in df.columns if col not in group_by_cols]
             )
 
-            if sum_columns:
-                # Check for any non-numeric column in selected sum columns
+            if group_by_cols and sum_columns:
+                # Validate sum columns are numeric
                 non_numeric_cols = [
                     col for col in sum_columns
                     if not pd.api.types.is_numeric_dtype(df[col])
@@ -64,11 +63,11 @@ if "gsheets" in st.secrets:
                         f"❌ The following columns are not numeric and cannot be summed: {', '.join(non_numeric_cols)}"
                     )
                 else:
-                    st.subheader(f"🧮 Sum View (Grouped by '{group_by_col}')")
-                    sum_df = df.groupby(group_by_col)[sum_columns].sum().reset_index()
+                    st.subheader(f"🧮 Sum View (Grouped by {', '.join(group_by_cols)})")
+                    sum_df = df.groupby(group_by_cols)[sum_columns].sum().reset_index()
                     st.dataframe(sum_df, use_container_width=True, hide_index=True)
             else:
-                st.info("ℹ️ Please select at least one column to sum.")
+                st.info("ℹ️ Please select at least one column to group by and one column to sum.")
         else:
             st.info("☝️ Please select at least one column to view the data.")
     except Exception as e:
