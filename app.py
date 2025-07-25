@@ -27,9 +27,9 @@ if "gsheets" in st.secrets:
         # Convert possible numeric columns
         df = df.apply(pd.to_numeric, errors='ignore')
 
-        # Multi-select column selection
+        # Column selection
         selected_columns = st.multiselect(
-            "🔽 Select one or more columns to display:",
+            "🔽 Select columns to display:",
             options=df.columns.tolist(),
             default=df.columns.tolist()
         )
@@ -39,19 +39,26 @@ if "gsheets" in st.secrets:
             st.subheader("📄 Selected Columns View")
             st.dataframe(selected_df, use_container_width=True, hide_index=True)
 
-            # Aggregation using the first selected column
-            first_col = selected_columns[0]
-            st.subheader(f"🧮 Sum View (Grouped by '{first_col}')")
+            # Choose group-by column
+            group_by_col = st.selectbox(
+                "📌 Choose column to group by:",
+                options=selected_columns,
+                index=0
+            )
 
-            # Identify numeric columns to sum (excluding the group column)
-            numeric_cols = selected_df.select_dtypes(include='number').columns.tolist()
-            numeric_cols = [col for col in numeric_cols if col != first_col]
+            # Choose which columns to sum
+            numeric_options = selected_df.select_dtypes(include='number').columns.tolist()
+            sum_columns = st.multiselect(
+                "➕ Select numeric columns to sum:",
+                options=[col for col in numeric_options if col != group_by_col]
+            )
 
-            if numeric_cols:
-                sum_df = selected_df.groupby(first_col)[numeric_cols].sum().reset_index()
+            if sum_columns:
+                st.subheader(f"🧮 Sum View (Grouped by '{group_by_col}')")
+                sum_df = selected_df.groupby(group_by_col)[sum_columns].sum().reset_index()
                 st.dataframe(sum_df, use_container_width=True, hide_index=True)
             else:
-                st.info("ℹ️ No numeric columns selected for summing.")
+                st.info("ℹ️ Please select at least one numeric column to sum.")
         else:
             st.info("☝️ Please select at least one column to view the data.")
     except Exception as e:
