@@ -14,8 +14,8 @@ credentials = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gshee
 client = gspread.authorize(credentials)
 
 # Open the sheet
-sheet_name = "your_sheet_name"  # Replace with your Google Sheet name
-worksheet = client.open(sheet_name).worksheet("raw")
+sheet_name = "MyData"  # Replace with your Google Sheet name
+worksheet = client.open(sheet_name).worksheet("raw3")
 
 # Load data into DataFrame
 data = pd.DataFrame(worksheet.get_all_records())
