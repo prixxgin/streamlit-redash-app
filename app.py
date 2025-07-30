@@ -1,61 +1,93 @@
 import streamlit as st
-import pandas as pd
 import gspread
-import seaborn as sns
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
 
-# Streamlit page config
-st.set_page_config(page_title="📍 Location Workload Heatmap", layout="wide")
-st.title("📍 Workload Volume by Location and Date")
+st.title('📊 Google Sheets Dashboard')
+st.write('This app connects to Google Sheets and displays data from the "raw" sheet.')
 
-# === 🔐 Google Sheets Authentication ===
-scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-credentials = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gsheets"], scope)
-client = gspread.authorize(credentials)
+# Use Streamlit secrets for credentials
+if "gsheets" in st.secrets:
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gsheets"], scope)
+    client = gspread.authorize(creds)
+    st.success('✅ Connected to Google Sheets!')
 
-# === 📄 Load Data from Google Sheets ===
-sheet_name = "MyData"  # Change to your actual sheet name
-worksheet = client.open(sheet_name).worksheet("raw3")  # Change to correct tab name
-data = pd.DataFrame(worksheet.get_all_records())
+    try:
+        spreadsheet = client.open("MyData")
+        worksheet = spreadsheet.worksheet("raw")
 
-# === 🧹 Data Preparation ===
-try:
-    data['Date'] = pd.to_datetime(data['Date'])
-except Exception as e:
-    st.error(f"❌ Date parsing error: {e}")
-    st.stop()
+        data = worksheet.get_all_values()
+        df = pd.DataFrame(data)
 
-# Check required columns
-required_cols = {'Date', 'Location', 'Task Type', 'Task Count'}
-if not required_cols.issubset(data.columns):
-    st.error(f"Missing required columns. Expected: {required_cols}")
-    st.stop()
+        # Use the first row as header
+        df.columns = df.iloc[0]
+        df = df.drop(df.index[0]).reset_index(drop=True)
 
-# === 🧭 Sidebar Filters ===
-st.sidebar.header("🔎 Filters")
-task_types = sorted(data['Task Type'].dropna().unique())
-selected_task = st.sidebar.selectbox("Select Task Type", options=task_types)
+        # Convert numeric-like columns
+        df = df.apply(pd.to_numeric, errors='ignore')
 
-# === 🔍 Filtered Data ===
-filtered_data = data[data['Task Type'] == selected_task]
+        # Select columns to display
+        selected_columns = st.multiselect(
+            "🔽 Select columns to display:",
+            options=df.columns.tolist(),
+            default=df.columns.tolist()
+        )
 
-# === 📊 Pivot Table for Heatmap ===
-pivot_df = filtered_data.pivot_table(
-    index='Location',
-    columns='Date',
-    values='Task Count',
-    aggfunc='sum',
-    fill_value=0
-)
+        if selected_columns:
+            selected_df = df[selected_columns]
+            st.subheader("📄 Selected Columns View")
+            st.dataframe(selected_df, use_container_width=True, hide_index=True)
 
-# === 🔥 Draw Heatmap ===
-st.subheader(f"📊 Heatmap for Task Type: {selected_task}")
-fig, ax = plt.subplots(figsize=(12, 6))
-sns.heatmap(pivot_df, annot=True, fmt='d', cmap='YlGnBu', ax=ax, linewidths=.5, linecolor='gray')
-plt.xticks(rotation=45)
-plt.ylabel("Location")
-plt.xlabel("Date")
-st.pyplot(fig)
+            # ✅ MULTI group-by selection
+            group_by_cols = st.multiselect(
+                "📌 Choose one or more columns to group by:",
+                options=df.columns.tolist()
+            )
+
+            # Columns to sum — all available
+            sum_columns = st.multiselect(
+                "➕ Select one or more columns to sum:",
+                options=[col for col in df.columns if col not in group_by_cols]
+            )
+
+            if group_by_cols and sum_columns:
+                # Validate sum columns are numeric
+                non_numeric_cols = [
+                    col for col in sum_columns
+                    if not pd.api.types.is_numeric_dtype(df[col])
+                ]
+
+                if non_numeric_cols:
+                    st.error(
+                        f"❌ The following columns are not numeric and cannot be summed: {', '.join(non_numeric_cols)}"
+                    )
+                else:
+                    st.subheader(f"🧮 Sum View (Grouped by {', '.join(group_by_cols)})")
+                    sum_df = df.groupby(group_by_cols)[sum_columns].sum().reset_index()
+                    st.dataframe(sum_df, use_container_width=True, hide_index=True)
+
+                    # 📊 Chart Section
+                    st.subheader("📈 Visualization")
+                    chart_type = st.selectbox("Select chart type:", ["Bar", "Line", "Area"])
+                    x_axis = st.selectbox("🔸 X-axis column:", group_by_cols)
+                    y_axis = st.multiselect("🔹 Y-axis column(s):", sum_columns, default=sum_columns)
+
+                    if x_axis and y_axis:
+                        chart_data = sum_df[[x_axis] + y_axis].copy()
+                        chart_data = chart_data.set_index(x_axis)
+
+                        if chart_type == "Bar":
+                            st.bar_chart(chart_data)
+                        elif chart_type == "Line":
+                            st.line_chart(chart_data)
+                        elif chart_type == "Area":
+                            st.area_chart(chart_data)
+            else:
+                st.info("ℹ️ Please select at least one column to group by and one column to sum.")
+        else:
+            st.info("☝️ Please select at least one column to view the data.")
+    except Exception as e:
+        st.error(f"❌ Error reading spreadsheet: {e}")
+else:
+    st.warning('⚠️ Google Sheets credentials not found in Streamlit secrets.')
