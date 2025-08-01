@@ -1,0 +1,37 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "barangay_name": "Barangay 1"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [120.9835, 14.5980],
+          [120.9875, 14.5980],
+          [120.9875, 14.6010],
+          [120.9835, 14.6010],
+          [120.9835, 14.5980]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "barangay_name": "Barangay 2"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [121.0840, 14.5750],
+          [121.0880, 14.5750],
+          [121.0880, 14.5785],
+          [121.0840, 14.5785],
+          [121.0840, 14.5750]
+        ]]
+      }
+    }
+  ]
+}
