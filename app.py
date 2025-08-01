@@ -10,35 +10,44 @@ st.set_page_config(page_title="📍 Barangay Billing Tool", layout="wide")
 st.title("📦 Barangay-Based Billing per Shipper")
 
 # -------------------------------
-# 📥 Load Data (with error handling)
+# 📥 File Upload for pickups.csv
 # -------------------------------
-def load_data():
-    try:
-        pickups = pd.read_csv("pickups.csv")
-        rates = pd.read_csv("rate_card.csv")
-        zones = gpd.read_file("barangays.geojson")
-        return pickups, rates, zones
-    except Exception as e:
-        st.error(f"❌ Error loading files: {e}")
-        st.stop()
+uploaded_file = st.file_uploader("📤 Upload Pickups CSV (lat, long, shipper)", type="csv")
 
-pickup_df, rate_df, barangay_gdf = load_data()
-
-# -------------------------------
-# 🛠️ Validate and Prepare Data
-# -------------------------------
-required_columns = {'shipper', 'lat', 'long'}
-if not required_columns.issubset(pickup_df.columns):
-    st.error(f"❌ pickups.csv must contain columns: {required_columns}")
+if not uploaded_file:
+    st.info("👆 Upload a CSV file with columns: `shipper`, `lat`, `long` to proceed.")
     st.stop()
 
+# -------------------------------
+# 📄 Load Other Local Files
+# -------------------------------
+try:
+    rate_df = pd.read_csv("rate_card.csv")
+    barangay_gdf = gpd.read_file("barangays.geojson")
+except Exception as e:
+    st.error(f"❌ Error loading rate card or geojson: {e}")
+    st.stop()
+
+# -------------------------------
+# 🔄 Load Uploaded Pickup Data
+# -------------------------------
+try:
+    pickup_df = pd.read_csv(uploaded_file)
+    required_columns = {'shipper', 'lat', 'long'}
+    if not required_columns.issubset(pickup_df.columns):
+        st.error(f"❌ Uploaded file must contain columns: {required_columns}")
+        st.stop()
+except Exception as e:
+    st.error(f"❌ Failed to read uploaded CSV: {e}")
+    st.stop()
+
+# -------------------------------
+# 🧭 Geospatial Matching
+# -------------------------------
 pickup_df = pickup_df.copy()
 pickup_df['geometry'] = pickup_df.apply(lambda row: Point(float(row['long']), float(row['lat'])), axis=1)
 pickup_gdf = gpd.GeoDataFrame(pickup_df, geometry='geometry', crs='EPSG:4326')
 
-# -------------------------------
-# 🧭 Spatial Join: Point in Barangay Polygon
-# -------------------------------
 try:
     matched = gpd.sjoin(
         pickup_gdf,
@@ -60,7 +69,7 @@ except Exception as e:
     st.stop()
 
 # -------------------------------
-# 📊 Billing Summary per Shipper
+# 📊 Billing Summary
 # -------------------------------
 billing = matched.groupby('shipper', as_index=False)['rate'].sum()
 
@@ -78,14 +87,14 @@ st.download_button(
 )
 
 # -------------------------------
-# 🗺️ Map of Pickups
+# 🗺️ Pickup Map
 # -------------------------------
 with st.expander("📍 View Pickup Map"):
     map_df = pickup_df.rename(columns={'lat': 'latitude', 'long': 'longitude'})
     st.map(map_df[['latitude', 'longitude']])
 
 # -------------------------------
-# 📑 Raw Matched Data (Optional)
+# 📑 Matched Pickup Details
 # -------------------------------
-with st.expander("📑 Matched Pickup Details"):
+with st.expander("📑 Matched Pickup Data"):
     st.dataframe(matched[['shipper', 'lat', 'long', 'barangay_name', 'rate']], use_container_width=True)
