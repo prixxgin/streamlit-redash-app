@@ -3,52 +3,42 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
+# -------------------------------
+# 🎯 Page Setup
+# -------------------------------
 st.set_page_config(page_title="📍 Barangay Billing Tool", layout="wide")
 st.title("📦 Barangay-Based Billing per Shipper")
 
-# Load Data with Debugging
-def load_data_safe():
+# -------------------------------
+# 📥 Load Data (with error handling)
+# -------------------------------
+def load_data():
     try:
         pickups = pd.read_csv("pickups.csv")
-        st.success("✅ pickups.csv loaded")
-    except Exception as e:
-        st.error(f"❌ Error loading pickups.csv: {e}")
-        st.stop()
-
-    try:
         rates = pd.read_csv("rate_card.csv")
-        st.success("✅ rate_card.csv loaded")
-    except Exception as e:
-        st.error(f"❌ Error loading rate_card.csv: {e}")
-        st.stop()
-
-    try:
         zones = gpd.read_file("barangays.geojson")
-        st.success("✅ barangays.geojson loaded")
+        return pickups, rates, zones
     except Exception as e:
-        st.error(f"❌ Error loading barangays.geojson: {e}")
+        st.error(f"❌ Error loading files: {e}")
         st.stop()
 
-    return pickups, rates, zones
+pickup_df, rate_df, barangay_gdf = load_data()
 
-pickup_df, rate_df, barangay_gdf = load_data_safe()
-
-# Check required columns
-required_cols = ['shipper', 'lat', 'long']
-missing = [col for col in required_cols if col not in pickup_df.columns]
-if missing:
-    st.error(f"❌ Missing columns in pickups.csv: {missing}")
+# -------------------------------
+# 🛠️ Validate and Prepare Data
+# -------------------------------
+required_columns = {'shipper', 'lat', 'long'}
+if not required_columns.issubset(pickup_df.columns):
+    st.error(f"❌ pickups.csv must contain columns: {required_columns}")
     st.stop()
 
-# Convert to GeoDataFrame
-try:
-    pickup_df['geometry'] = pickup_df.apply(lambda row: Point(float(row['long']), float(row['lat'])), axis=1)
-    pickup_gdf = gpd.GeoDataFrame(pickup_df, geometry='geometry', crs='EPSG:4326')
-except Exception as e:
-    st.error(f"❌ Error creating geometry: {e}")
-    st.stop()
+pickup_df = pickup_df.copy()
+pickup_df['geometry'] = pickup_df.apply(lambda row: Point(float(row['long']), float(row['lat'])), axis=1)
+pickup_gdf = gpd.GeoDataFrame(pickup_df, geometry='geometry', crs='EPSG:4326')
 
-# Spatial Join
+# -------------------------------
+# 🧭 Spatial Join: Point in Barangay Polygon
+# -------------------------------
 try:
     matched = gpd.sjoin(
         pickup_gdf,
@@ -56,32 +46,46 @@ try:
         how='left',
         predicate='within'
     )
-    st.success("✅ Spatial join successful")
 except Exception as e:
     st.error(f"❌ Spatial join failed: {e}")
     st.stop()
 
-# Merge Rate Card
+# -------------------------------
+# 💰 Merge with Rate Card
+# -------------------------------
 try:
     matched = matched.merge(rate_df, left_on='barangay_name', right_on='barangay', how='left')
 except Exception as e:
-    st.error(f"❌ Rate card merge failed: {e}")
+    st.error(f"❌ Merging rate card failed: {e}")
     st.stop()
 
-# Calculate Billing
+# -------------------------------
+# 📊 Billing Summary per Shipper
+# -------------------------------
 billing = matched.groupby('shipper', as_index=False)['rate'].sum()
 
-# Show Results
+# -------------------------------
+# 📋 Display Billing Table
+# -------------------------------
 st.subheader("📋 Billing Summary")
-st.dataframe(billing)
+st.dataframe(billing, use_container_width=True)
 
-# Download
-st.download_button("⬇️ Download CSV", billing.to_csv(index=False), "billing_summary.csv")
+st.download_button(
+    label="⬇️ Download Billing CSV",
+    data=billing.to_csv(index=False),
+    file_name="billing_summary.csv",
+    mime="text/csv"
+)
 
-# Optional Map
-with st.expander("📍 Pickup Map"):
-    st.map(pickup_df[['lat', 'long']])
+# -------------------------------
+# 🗺️ Map of Pickups
+# -------------------------------
+with st.expander("📍 View Pickup Map"):
+    map_df = pickup_df.rename(columns={'lat': 'latitude', 'long': 'longitude'})
+    st.map(map_df[['latitude', 'longitude']])
 
-# Optional Matched Data
-with st.expander("📑 Matched Details"):
-    st.dataframe(matched[['shipper', 'lat', 'long', 'barangay_name', 'rate']])
+# -------------------------------
+# 📑 Raw Matched Data (Optional)
+# -------------------------------
+with st.expander("📑 Matched Pickup Details"):
+    st.dataframe(matched[['shipper', 'lat', 'long', 'barangay_name', 'rate']], use_container_width=True)
