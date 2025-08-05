@@ -10,12 +10,15 @@ st.set_page_config(page_title="📍 Barangay Billing Tool", layout="wide")
 st.title("📦 Barangay-Based Billing per Shipper")
 
 # -------------------------------
-# 📥 File Upload for pickups.csv
+# 📥 File Upload for pickups file
 # -------------------------------
-uploaded_file = st.file_uploader("📤 Upload Pickups CSV (lat, long, shipper)", type="csv")
+uploaded_file = st.file_uploader(
+    "📤 Upload Pickups File (CSV or Excel with columns: shipper, lat, long)",
+    type=["csv", "xlsx", "xls"]
+)
 
 if not uploaded_file:
-    st.info("👆 Upload a CSV file with columns: `shipper`, `lat`, `long` to proceed.")
+    st.info("👆 Upload a CSV or Excel file with columns: `shipper`, `lat`, `long` to proceed.")
     st.stop()
 
 # -------------------------------
@@ -31,14 +34,23 @@ except Exception as e:
 # -------------------------------
 # 🔄 Load Uploaded Pickup Data
 # -------------------------------
+file_type = uploaded_file.name.split('.')[-1].lower()
+
 try:
-    pickup_df = pd.read_csv(uploaded_file)
+    if file_type in ['xlsx', 'xls']:
+        pickup_df = pd.read_excel(uploaded_file)
+    elif file_type == 'csv':
+        pickup_df = pd.read_csv(uploaded_file)
+    else:
+        st.error("❌ Unsupported file type. Please upload a CSV or Excel file.")
+        st.stop()
+
     required_columns = {'shipper', 'lat', 'long'}
     if not required_columns.issubset(pickup_df.columns):
         st.error(f"❌ Uploaded file must contain columns: {required_columns}")
         st.stop()
 except Exception as e:
-    st.error(f"❌ Failed to read uploaded CSV: {e}")
+    st.error(f"❌ Failed to read uploaded file: {e}")
     st.stop()
 
 # -------------------------------
