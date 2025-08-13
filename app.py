@@ -1,112 +1,25 @@
-import streamlit as st
 import pandas as pd
-import geopandas as gpd
-from shapely.geometry import Point
 
-# -------------------------------
-# 🎯 Page Setup
-# -------------------------------
-st.set_page_config(page_title="📍 Barangay Billing Tool", layout="wide")
-st.title("📦 Barangay-Based Billing per Shipper")
+def process_asn_pickup(input_file, output_file):
+    # Read the CSV
+    df = pd.read_csv(input_file)
 
-# -------------------------------
-# 📥 File Upload for pickups file
-# -------------------------------
-uploaded_file = st.file_uploader(
-    "📤 Upload Pickups File (CSV or Excel with columns: shipper, lat, long)",
-    type=["csv", "xlsx", "xls"]
-)
+    # Create helper flag
+    df['has_asn'] = df['pickup_hub_name'].str.contains('ASN', case=False, na=False)
 
-if not uploaded_file:
-    st.info("👆 Upload a CSV or Excel file with columns: `shipper`, `lat`, `long` to proceed.")
-    st.stop()
+    # Identify weeks containing ASN
+    weeks_with_asn = df.loc[df['has_asn'], 'Week'].unique()
 
-# -------------------------------
-# 📄 Load Other Local Files
-# -------------------------------
-try:
-    rate_df = pd.read_csv("rate_card.csv")
-    barangay_gdf = gpd.read_file("barangays.geojson")
-except Exception as e:
-    st.error(f"❌ Error loading rate card or geojson: {e}")
-    st.stop()
+    # Create Column T
+    df['T'] = df['Week'].apply(lambda w: 'ASN PICKUP' if w in weeks_with_asn else '')
 
-# -------------------------------
-# 🔄 Load Uploaded Pickup Data
-# -------------------------------
-file_type = uploaded_file.name.split('.')[-1].lower()
+    # Remove helper column
+    df.drop(columns=['has_asn'], inplace=True)
 
-try:
-    if file_type in ['xlsx', 'xls']:
-        pickup_df = pd.read_excel(uploaded_file)
-    elif file_type == 'csv':
-        pickup_df = pd.read_csv(uploaded_file)
-    else:
-        st.error("❌ Unsupported file type. Please upload a CSV or Excel file.")
-        st.stop()
+    # Save result
+    df.to_csv(output_file, index=False)
+    print(f"Processed file saved to: {output_file}")
 
-    required_columns = {'shipper', 'lat', 'long'}
-    if not required_columns.issubset(pickup_df.columns):
-        st.error(f"❌ Uploaded file must contain columns: {required_columns}")
-        st.stop()
-except Exception as e:
-    st.error(f"❌ Failed to read uploaded file: {e}")
-    st.stop()
 
-# -------------------------------
-# 🧭 Geospatial Matching
-# -------------------------------
-pickup_df = pickup_df.copy()
-pickup_df['geometry'] = pickup_df.apply(lambda row: Point(float(row['long']), float(row['lat'])), axis=1)
-pickup_gdf = gpd.GeoDataFrame(pickup_df, geometry='geometry', crs='EPSG:4326')
-
-try:
-    matched = gpd.sjoin(
-        pickup_gdf,
-        barangay_gdf[['barangay_name', 'geometry']],
-        how='left',
-        predicate='within'
-    )
-except Exception as e:
-    st.error(f"❌ Spatial join failed: {e}")
-    st.stop()
-
-# -------------------------------
-# 💰 Merge with Rate Card
-# -------------------------------
-try:
-    matched = matched.merge(rate_df, left_on='barangay_name', right_on='barangay', how='left')
-except Exception as e:
-    st.error(f"❌ Merging rate card failed: {e}")
-    st.stop()
-
-# -------------------------------
-# 📊 Billing Summary
-# -------------------------------
-billing = matched.groupby('shipper', as_index=False)['rate'].sum()
-
-# -------------------------------
-# 📋 Display Billing Table
-# -------------------------------
-st.subheader("📋 Billing Summary")
-st.dataframe(billing, use_container_width=True)
-
-st.download_button(
-    label="⬇️ Download Billing CSV",
-    data=billing.to_csv(index=False),
-    file_name="billing_summary.csv",
-    mime="text/csv"
-)
-
-# -------------------------------
-# 🗺️ Pickup Map
-# -------------------------------
-with st.expander("📍 View Pickup Map"):
-    map_df = pickup_df.rename(columns={'lat': 'latitude', 'long': 'longitude'})
-    st.map(map_df[['latitude', 'longitude']])
-
-# -------------------------------
-# 📑 Matched Pickup Details
-# -------------------------------
-with st.expander("📑 Matched Pickup Data"):
-    st.dataframe(matched[['shipper', 'lat', 'long', 'barangay_name', 'rate']], use_container_width=True)
+# Example usage:
+# process_asn_pickup("input.csv", "output_with_asn.csv")
