@@ -1,30 +1,25 @@
 import pandas as pd
 
-def process_asn_pickup(input_file, output_file):
-    # Read CSV and strip spaces from column names
-    df = pd.read_csv(input_file, encoding='utf-8-sig')
-    df.columns = df.columns.str.strip()
+# === CONFIG ===
+INPUT_FILE = "pickups.csv"   # CSV in your repo
+OUTPUT_FILE = "pickups_with_asn.csv"  # Output file with new column
 
-    # Check required columns exist
-    required_cols = {'pickup_hub_name', 'Week'}
-    if not required_cols.issubset(df.columns):
-        raise ValueError(f"CSV must contain columns: {required_cols}")
+# 1️⃣ Read the CSV
+df = pd.read_csv(INPUT_FILE)
 
-    # Create helper flag
-    df['has_asn'] = df['pickup_hub_name'].str.contains('ASN', case=False, na=False)
+# 2️⃣ Check for 'ASN' keyword in pickup_hub_name (case-insensitive)
+df["has_asn"] = df["pickup_hub_name"].str.contains("ASN", case=False, na=False)
 
-    # Identify weeks containing ASN
-    weeks_with_asn = df.loc[df['has_asn'], 'Week'].unique()
+# 3️⃣ Find all weeks that have ASN pickups
+weeks_with_asn = df.loc[df["has_asn"], "week"].unique()
 
-    # Create Column T
-    df['T'] = df['Week'].apply(lambda w: 'ASN PICKUP' if w in weeks_with_asn else '')
+# 4️⃣ Mark ASN PICKUP per row
+df["ASN PICKUP"] = df["week"].apply(lambda w: "Yes" if w in weeks_with_asn else "No")
 
-    # Remove helper column
-    df.drop(columns=['has_asn'], inplace=True)
+# 5️⃣ Drop helper column (optional)
+df.drop(columns=["has_asn"], inplace=True)
 
-    # Save result
-    df.to_csv(output_file, index=False)
-    print(f"✅ Processed file saved to: {output_file}")
+# 6️⃣ Save output
+df.to_csv(OUTPUT_FILE, index=False)
 
-# Example usage:
-# process_asn_pickup("ASN Shipper Transition.csv", "output_with_asn.csv")
+print(f"✅ Updated file saved as {OUTPUT_FILE}")
