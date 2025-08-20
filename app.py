@@ -4,11 +4,13 @@ import sys
 import platform
 import pandas as pd
 
-st.title("🛠️ GeoPython Environment Setup Checker")
+st.set_page_config(page_title="GeoPython Environment Checker", page_icon="🗺️", layout="wide")
+
+st.title("🗺️ GeoPython Environment Checker")
 
 # Python version
 st.subheader("Python Version")
-st.write(sys.version)
+st.code(sys.version)
 
 # Platform info
 st.subheader("Platform")
@@ -19,10 +21,11 @@ st.subheader("Installed Packages")
 result = subprocess.run([sys.executable, "-m", "pip", "list"], capture_output=True, text=True)
 packages = [line.split() for line in result.stdout.splitlines()[2:]]
 df = pd.DataFrame(packages, columns=["Package", "Version"])
-st.dataframe(df)
+st.dataframe(df, use_container_width=True)
 
-# Check critical packages
+# Check required packages
 st.subheader("Environment Validation")
+
 required = {
     "numpy": "1.26.4",
     "geopandas": "0.10.2",
