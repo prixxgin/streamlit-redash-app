@@ -2,59 +2,69 @@ import streamlit as st
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
+from fastkml import kml
+from shapely.geometry import shape
 from io import BytesIO
 
-st.set_page_config(page_title="Lat-Long Processor", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="Barangay Mapper", page_icon="📍", layout="wide")
 
-st.title("🌍 Lat/Long File Processor")
+st.title("📍 Barangay Mapper")
 
-# Upload file
-uploaded_file = st.file_uploader("Upload CSV/Excel with latitude & longitude columns", type=["csv", "xlsx"])
+# Upload lat/long file
+latlong_file = st.file_uploader("Upload CSV/Excel with latitude & longitude", type=["csv", "xlsx"])
 
-if uploaded_file:
-    # Detect file type
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
+# Upload barangay KML
+kml_file = st.file_uploader("Upload Barangay Boundaries (KML)", type=["kml"])
+
+if latlong_file and kml_file:
+    # --- Load Lat/Long Data ---
+    if latlong_file.name.endswith(".csv"):
+        df = pd.read_csv(latlong_file)
     else:
-        df = pd.read_excel(uploaded_file)
+        df = pd.read_excel(latlong_file)
 
-    st.subheader("Preview of Uploaded Data")
+    if not {"latitude", "longitude"}.issubset(df.columns):
+        st.error("Uploaded file must contain 'latitude' and 'longitude' columns.")
+        st.stop()
+
+    st.subheader("Uploaded Lat/Long Data")
     st.dataframe(df.head())
 
-    # Check for lat/lon columns
-    if {"latitude", "longitude"}.issubset(df.columns):
-        # Create GeoDataFrame
-        gdf = gpd.GeoDataFrame(
-            df,
-            geometry=gpd.points_from_xy(df.longitude, df.latitude),
-            crs="EPSG:4326"  # WGS84
-        )
+    # Convert to GeoDataFrame
+    gdf_points = gpd.GeoDataFrame(
+        df,
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
+        crs="EPSG:4326"
+    )
 
-        # Example transformation: convert to UTM
-        gdf_utm = gdf.to_crs(epsg=32651)  # Example: UTM Zone 51N (Philippines)
-        gdf["x"] = gdf_utm.geometry.x
-        gdf["y"] = gdf_utm.geometry.y
+    # --- Parse KML into GeoDataFrame ---
+    kml_text = kml_file.read().decode("utf-8")
+    k = kml.KML()
+    k.from_string(kml_text)
 
-        st.subheader("Processed Data with Projected Coordinates")
-        st.dataframe(gdf.head())
+    features = []
+    for document in k.features():
+        for placemark in document.features():
+            features.append({
+                "name": placemark.name,
+                "geometry": shape(placemark.geometry)
+            })
 
-        # Download as CSV
-        csv = gdf.drop(columns="geometry").to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Download Processed CSV",
-            data=csv,
-            file_name="processed_latlong.csv",
-            mime="text/csv"
-        )
+    gdf_barangays = gpd.GeoDataFrame(features, crs="EPSG:4326")
 
-        # Download as GeoJSON
-        geojson = gdf.to_json()
-        st.download_button(
-            label="📥 Download GeoJSON",
-            data=geojson,
-            file_name="processed_latlong.geojson",
-            mime="application/json"
-        )
+    st.subheader("Barangay Boundaries from KML")
+    st.write(gdf_barangays.head())
 
-    else:
-        st.error("Uploaded file must contain 'latitude' and 'longitude' columns.")
+    # --- Spatial Join ---
+    gdf_joined = gpd.sjoin(gdf_points, gdf_barangays, how="left", predicate="within")
+    gdf_joined = gdf_joined.drop(columns=["index_right"])
+
+    st.subheader("Joined Data (Points + Barangays)")
+    st.dataframe(gdf_joined.head())
+
+    # --- Download Buttons ---
+    csv = gdf_joined.drop(columns="geometry").to_csv(index=False).encode("utf-8")
+    st.download_button("📥 Download as CSV", csv, "barangay_results.csv", "text/csv")
+
+    geojson = gdf_joined.to_json()
+    st.download_button("📥 Download as GeoJSON", geojson, "barangay_results.geojson", "application/json")
