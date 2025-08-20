@@ -1,22 +1,27 @@
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import Point
-from fastkml import kml
-from shapely.geometry import shape
+from shapely.geometry import Point, shape
 from io import BytesIO
 
-st.set_page_config(page_title="Barangay Mapper", page_icon="📍", layout="wide")
+# Try importing fastkml if available
+try:
+    from fastkml import kml
+    HAS_FASTKML = True
+except ImportError:
+    HAS_FASTKML = False
 
+st.set_page_config(page_title="Barangay Mapper", page_icon="📍", layout="wide")
 st.title("📍 Barangay Mapper")
 
 # Upload lat/long file
 latlong_file = st.file_uploader("Upload CSV/Excel with latitude & longitude", type=["csv", "xlsx"])
 
-# Upload barangay KML
-kml_file = st.file_uploader("Upload Barangay Boundaries (KML)", type=["kml"])
+# Upload barangay boundaries (KML, GeoJSON, or Shapefile ZIP)
+boundary_file = st.file_uploader("Upload Barangay Boundaries (KML / GeoJSON / Shapefile ZIP)", 
+                                 type=["kml", "geojson", "json", "zip", "shp"])
 
-if latlong_file and kml_file:
+if latlong_file and boundary_file:
     # --- Load Lat/Long Data ---
     if latlong_file.name.endswith(".csv"):
         df = pd.read_csv(latlong_file)
@@ -30,41 +35,49 @@ if latlong_file and kml_file:
     st.subheader("Uploaded Lat/Long Data")
     st.dataframe(df.head())
 
-    # Convert to GeoDataFrame
     gdf_points = gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
         crs="EPSG:4326"
     )
 
-    # --- Parse KML into GeoDataFrame ---
-    kml_text = kml_file.read().decode("utf-8")
-    k = kml.KML()
-    k.from_string(kml_text)
+    # --- Load Boundaries ---
+    if boundary_file.name.endswith(".kml"):
+        if not HAS_FASTKML:
+            st.error("KML support requires `fastkml`. Please add `fastkml==0.12` in requirements.txt.")
+            st.stop()
 
-    features = []
-    for document in k.features():
-        for placemark in document.features():
-            features.append({
-                "name": placemark.name,
-                "geometry": shape(placemark.geometry)
-            })
+        kml_text = boundary_file.read().decode("utf-8")
+        k = kml.KML()
+        k.from_string(kml_text)
 
-    gdf_barangays = gpd.GeoDataFrame(features, crs="EPSG:4326")
+        features = []
+        for document in k.features():
+            for placemark in document.features():
+                features.append({
+                    "name": placemark.name,
+                    "geometry": shape(placemark.geometry)
+                })
 
-    st.subheader("Barangay Boundaries from KML")
-    st.write(gdf_barangays.head())
+        gdf_boundaries = gpd.GeoDataFrame(features, crs="EPSG:4326")
+
+    else:
+        # Handle GeoJSON / Shapefile
+        gdf_boundaries = gpd.read_file(boundary_file)
+
+    st.subheader("Uploaded Boundaries")
+    st.write(gdf_boundaries.head())
 
     # --- Spatial Join ---
-    gdf_joined = gpd.sjoin(gdf_points, gdf_barangays, how="left", predicate="within")
+    gdf_joined = gpd.sjoin(gdf_points, gdf_boundaries, how="left", predicate="within")
     gdf_joined = gdf_joined.drop(columns=["index_right"])
 
-    st.subheader("Joined Data (Points + Barangays)")
+    st.subheader("Joined Data (Points + Boundaries)")
     st.dataframe(gdf_joined.head())
 
-    # --- Download Buttons ---
+    # --- Download ---
     csv = gdf_joined.drop(columns="geometry").to_csv(index=False).encode("utf-8")
-    st.download_button("📥 Download as CSV", csv, "barangay_results.csv", "text/csv")
+    st.download_button("📥 Download as CSV", csv, "results.csv", "text/csv")
 
     geojson = gdf_joined.to_json()
-    st.download_button("📥 Download as GeoJSON", geojson, "barangay_results.geojson", "application/json")
+    st.download_button("📥 Download as GeoJSON", geojson, "results.geojson", "application/json")
