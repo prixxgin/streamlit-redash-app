@@ -1,83 +1,79 @@
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import Point, shape
-from io import BytesIO
+from shapely.geometry import Point
 
-# Try importing fastkml if available
-try:
-    from fastkml import kml
-    HAS_FASTKML = True
-except ImportError:
-    HAS_FASTKML = False
+st.title("Barangay Finder")
+st.write("Upload barangay boundaries (KML/GeoJSON/Shapefile) and lat-long CSV to map barangays.")
 
-st.set_page_config(page_title="Barangay Mapper", page_icon="📍", layout="wide")
-st.title("📍 Barangay Mapper")
+# --- Upload boundary file ---
+boundary_file = st.file_uploader(
+    "Upload boundary file (KML, GeoJSON, or Shapefile as .zip)", type=["kml", "geojson", "zip"]
+)
 
-# Upload lat/long file
-latlong_file = st.file_uploader("Upload CSV/Excel with latitude & longitude", type=["csv", "xlsx"])
+# --- Upload coordinates file ---
+latlong_file = st.file_uploader("Upload CSV with 'latitude' and 'longitude' columns", type="csv")
 
-# Upload barangay boundaries (KML, GeoJSON, or Shapefile ZIP)
-boundary_file = st.file_uploader("Upload Barangay Boundaries (KML / GeoJSON / Shapefile ZIP)", 
-                                 type=["kml", "geojson", "json", "zip", "shp"])
-
-if latlong_file and boundary_file:
-    # --- Load Lat/Long Data ---
-    if latlong_file.name.endswith(".csv"):
-        df = pd.read_csv(latlong_file)
-    else:
-        df = pd.read_excel(latlong_file)
-
-    if not {"latitude", "longitude"}.issubset(df.columns):
-        st.error("Uploaded file must contain 'latitude' and 'longitude' columns.")
-        st.stop()
-
-    st.subheader("Uploaded Lat/Long Data")
-    st.dataframe(df.head())
-
-    gdf_points = gpd.GeoDataFrame(
-        df,
-        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
-        crs="EPSG:4326"
-    )
-
-    # --- Load Boundaries ---
+if boundary_file and latlong_file:
+    # Load boundaries
     if boundary_file.name.endswith(".kml"):
-        if not HAS_FASTKML:
-            st.error("KML support requires `fastkml`. Please add `fastkml==0.12` in requirements.txt.")
+        try:
+            from fastkml import kml
+        except ImportError:
+            st.error("KML support requires `fastkml`. Please add `fastkml` to requirements.txt")
             st.stop()
 
-        kml_text = boundary_file.read().decode("utf-8")
         k = kml.KML()
-        k.from_string(kml_text)
+        k.from_string(boundary_file.read())
+        features = list(k.features())
+        document = list(features[0].features())
+        placemarks = list(document[0].features())
 
-        features = []
-        for document in k.features():
-            for placemark in document.features():
-                features.append({
-                    "name": placemark.name,
-                    "geometry": shape(placemark.geometry)
-                })
+        data = []
+        for pm in placemarks:
+            geom = pm.geometry
+            name = pm.name
+            data.append({"name": name, "geometry": geom})
 
-        gdf_boundaries = gpd.GeoDataFrame(features, crs="EPSG:4326")
+        barangays = gpd.GeoDataFrame(data, crs="EPSG:4326")
+
+    elif boundary_file.name.endswith(".geojson"):
+        barangays = gpd.read_file(boundary_file)
+
+    elif boundary_file.name.endswith(".zip"):
+        # For shapefile, user must upload a zipped shapefile (.shp, .shx, .dbf, .prj together)
+        import tempfile, zipfile, os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with zipfile.ZipFile(boundary_file, "r") as z:
+                z.extractall(tmpdir)
+                shp_files = [f for f in os.listdir(tmpdir) if f.endswith(".shp")]
+                if not shp_files:
+                    st.error("No .shp file found in the uploaded ZIP.")
+                    st.stop()
+                barangays = gpd.read_file(os.path.join(tmpdir, shp_files[0]))
 
     else:
-        # Handle GeoJSON / Shapefile
-        gdf_boundaries = gpd.read_file(boundary_file)
+        st.error("Unsupported boundary file format")
+        st.stop()
 
-    st.subheader("Uploaded Boundaries")
-    st.write(gdf_boundaries.head())
+    # Load lat/long data
+    df = pd.read_csv(latlong_file)
+    if not {"latitude", "longitude"}.issubset(df.columns):
+        st.error("CSV must have 'latitude' and 'longitude' columns")
+        st.stop()
 
-    # --- Spatial Join ---
-    gdf_joined = gpd.sjoin(gdf_points, gdf_boundaries, how="left", predicate="within")
-    gdf_joined = gdf_joined.drop(columns=["index_right"])
+    points = gpd.GeoDataFrame(
+        df, geometry=gpd.points_from_xy(df.longitude, df.latitude), crs="EPSG:4326"
+    )
 
-    st.subheader("Joined Data (Points + Boundaries)")
-    st.dataframe(gdf_joined.head())
+    # Spatial join
+    joined = gpd.sjoin(points, barangays, how="left", predicate="within")
 
-    # --- Download ---
-    csv = gdf_joined.drop(columns="geometry").to_csv(index=False).encode("utf-8")
-    st.download_button("📥 Download as CSV", csv, "results.csv", "text/csv")
+    # Show results
+    st.subheader("Results")
+    st.dataframe(joined[["latitude", "longitude", "name"]])
 
-    geojson = gdf_joined.to_json()
-    st.download_button("📥 Download as GeoJSON", geojson, "results.geojson", "application/json")
+    # Download results
+    csv = joined[["latitude", "longitude", "name"]].to_csv(index=False)
+    st.download_button("Download Results CSV", data=csv, file_name="barangay_results.csv", mime="text/csv")
