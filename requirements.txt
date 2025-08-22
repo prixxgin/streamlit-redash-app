@@ -1,4 +1,7 @@
-pandas
-fastkml
-shapely
 streamlit
+pandas
+geopandas
+shapely
+fiona
+pyproj
+rtree
