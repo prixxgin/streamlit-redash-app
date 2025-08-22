@@ -1,79 +1,99 @@
 import streamlit as st
 import pandas as pd
-import geopandas as gpd
-from shapely.geometry import Point
+from fastkml import kml
+from shapely.geometry import Point, Polygon
 
-st.title("Barangay Finder")
-st.write("Upload barangay boundaries (KML/GeoJSON/Shapefile) and lat-long CSV to map barangays.")
+# Placeholder for KML data
+barangay_polygons = []
 
-# --- Upload boundary file ---
-boundary_file = st.file_uploader(
-    "Upload boundary file (KML, GeoJSON, or Shapefile as .zip)", type=["kml", "geojson", "zip"]
-)
+def load_barangay_kml(kml_file_path):
+    """Loads barangay boundary data from a KML file."""
+    global barangay_polygons
+    barangay_polygons = []
+    with open(kml_file_path, 'rb') as kml_file:
+        doc = kml.KML()
+        doc.from_string(kml_file.read())
+        
+        # Assuming a simple KML structure with one Document and Placemarks directly under it
+        for feature in doc.features():
+            if isinstance(feature, kml.Document):
+                for sub_feature in feature.features():
+                    if isinstance(sub_feature, kml.Placemark):
+                        if sub_feature.geometry is not None and sub_feature.geometry.geom_type == 'Polygon':
+                            # Convert KML polygon to shapely Polygon
+                            coords = list(sub_feature.geometry.exterior.coords)
+                            polygon = Polygon(coords)
+                            barangay_polygons.append({
+                                'name': sub_feature.name,
+                                'polygon': polygon,
+                                # You might need to adjust this based on where 'barangay_code' is in your KML
+                                'barangay_code': sub_feature.name # Placeholder, adjust as needed
+                            })
+            elif isinstance(feature, kml.Placemark):
+                if feature.geometry is not None and feature.geometry.geom_type == 'Polygon':
+                    coords = list(feature.geometry.exterior.coords)
+                    polygon = Polygon(coords)
+                    barangay_polygons.append({
+                        'name': feature.name,
+                        'polygon': polygon,
+                        'barangay_code': feature.name # Placeholder, adjust as needed
+                    })
+    return barangay_polygons
 
-# --- Upload coordinates file ---
-latlong_file = st.file_uploader("Upload CSV with 'latitude' and 'longitude' columns", type="csv")
+def get_barangay_code(latitude, longitude):
+    """Matches lat/long to a barangay polygon and returns the barangay code."""
+    point = Point(longitude, latitude) # Shapely Point expects (longitude, latitude)
+    for barangay in barangay_polygons:
+        if barangay['polygon'].contains(point):
+            return barangay['barangay_code']
+    return "Not Found"
 
-if boundary_file and latlong_file:
-    # Load boundaries
-    if boundary_file.name.endswith(".kml"):
-        try:
-            from fastkml import kml
-        except ImportError:
-            st.error("KML support requires `fastkml`. Please add `fastkml` to requirements.txt")
-            st.stop()
+def process_csv(df):
+    """Processes the input DataFrame and appends the barangay_code column."""
+    df['barangay_code'] = df.apply(lambda row: get_barangay_code(row['latitude'], row['longitude']), axis=1)
+    return df
 
-        k = kml.KML()
-        k.from_string(boundary_file.read())
-        features = list(k.features())
-        document = list(features[0].features())
-        placemarks = list(document[0].features())
+st.title("Barangay Code Lookup from Lat/Long")
 
-        data = []
-        for pm in placemarks:
-            geom = pm.geometry
-            name = pm.name
-            data.append({"name": name, "geometry": geom})
+st.sidebar.header("Upload KML Data")
+kml_file = st.sidebar.file_uploader("Upload KML File", type=["kml"])
 
-        barangays = gpd.GeoDataFrame(data, crs="EPSG:4326")
+if kml_file is not None:
+    # Save the uploaded KML file temporarily
+    with open("uploaded_barangay.kml", "wb") as f:
+        f.write(kml_file.getbuffer())
+    
+    st.sidebar.success("KML file uploaded successfully!")
+    
+    # Load KML data
+    try:
+        load_barangay_kml("uploaded_barangay.kml")
+        st.sidebar.write(f"Loaded {len(barangay_polygons)} barangay polygons.")
+    except Exception as e:
+        st.sidebar.error(f"Error loading KML: {e}")
 
-    elif boundary_file.name.endswith(".geojson"):
-        barangays = gpd.read_file(boundary_file)
+st.header("Upload CSV File")
+uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-    elif boundary_file.name.endswith(".zip"):
-        # For shapefile, user must upload a zipped shapefile (.shp, .shx, .dbf, .prj together)
-        import tempfile, zipfile, os
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+    st.write("Original CSV Preview:", df.head())
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with zipfile.ZipFile(boundary_file, "r") as z:
-                z.extractall(tmpdir)
-                shp_files = [f for f in os.listdir(tmpdir) if f.endswith(".shp")]
-                if not shp_files:
-                    st.error("No .shp file found in the uploaded ZIP.")
-                    st.stop()
-                barangays = gpd.read_file(os.path.join(tmpdir, shp_files[0]))
+    if st.button("Process CSV"):
+        if not barangay_polygons:
+            st.error("Please upload and load KML data first.")
+        else:
+            with st.spinner('Processing CSV...'):
+                enriched_df = process_csv(df.copy())
+                st.success("CSV processed successfully!")
+                st.write("Enriched CSV Preview:", enriched_df.head())
 
-    else:
-        st.error("Unsupported boundary file format")
-        st.stop()
-
-    # Load lat/long data
-    df = pd.read_csv(latlong_file)
-    if not {"latitude", "longitude"}.issubset(df.columns):
-        st.error("CSV must have 'latitude' and 'longitude' columns")
-        st.stop()
-
-    points = gpd.GeoDataFrame(
-        df, geometry=gpd.points_from_xy(df.longitude, df.latitude), crs="EPSG:4326"
-    )
-
-    # Spatial join
-    joined = gpd.sjoin(points, barangays, how="left", predicate="within")
-
-    # Show results
-    st.subheader("Results")
-    st.dataframe(joined[["latitude", "longitude", "name"]])
-
-    # Download results
-    csv = joined[["latitude", "longitude", "name"]].to_csv(index=False)
-    st.download_button("Download Results CSV", data=csv, file_name="barangay_results.csv", mime="text/csv")
+                csv_output = enriched_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Enriched CSV",
+                    data=csv_output,
+                    file_name="output_with_barangay.csv",
+                    mime="text/csv",
+                )
+else:
+    st.info("Upload a CSV file to begin.")
