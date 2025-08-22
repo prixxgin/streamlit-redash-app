@@ -1,9 +1,4 @@
-fastkml==0.12
-geopandas==0.10.2
-shapely==2.0.3
-pyproj==3.6.1
-Fiona==1.9.5
-GDAL==3.8.4
-Rtree==1.2.0
-pandas==2.2.3
-numpy==1.26.4
+pandas
+fastkml
+shapely
+streamlit
