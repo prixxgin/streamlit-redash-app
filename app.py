@@ -3,11 +3,11 @@ import pandas as pd
 
 # Sample guest list
 guests = [
-    {"name": "Anna Cruz", "table": 1},
-    {"name": "Mark Santos", "table": 2},
-    {"name": "Jenny Lopez", "table": 3},
-    {"name": "Carlos Reyes", "table": 1},
-    {"name": "Maria Gomez", "table": 2},
+    {"name": "BLESILDA LUMAQUE ", "table": 1},
+    {"name": "MARK ANGELO LUMAQUE", "table": 1},
+    {"name": "MARVIE LUMAQUE", "table": 1},
+    {"name": "MITCHELL  SUAREZ", "table": 1},
+    {"name": "SOFIA GABRIEL SUAREZ", "table": 1},
 ]
 
 df = pd.DataFrame(guests)
