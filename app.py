@@ -1,71 +1,28 @@
 import streamlit as st
 import pandas as pd
-import geopandas as gpd
-from shapely.geometry import Point
 
-# Cache barangay file
-@st.cache_data
-def load_barangays(file_path="barangays.geojson"):
-    barangays = gpd.read_file(file_path)
-    barangays = barangays.to_crs(epsg=4326)
+# Sample guest list
+guests = [
+    {"name": "Anna Cruz", "table": 1},
+    {"name": "Mark Santos", "table": 2},
+    {"name": "Jenny Lopez", "table": 3},
+    {"name": "Carlos Reyes", "table": 1},
+    {"name": "Maria Gomez", "table": 2},
+]
 
-    # Detect column names dynamically
-    name_col, code_col = None, None
-    for col in barangays.columns:
-        col_lower = col.lower()
-        if "brgy" in col_lower and "name" in col_lower:
-            name_col = col
-        if "psgc" in col_lower or "code" in col_lower:
-            code_col = col
+df = pd.DataFrame(guests)
 
-    # If not found, just pick first two non-geometry columns
-    non_geom_cols = [c for c in barangays.columns if c != "geometry"]
-    if not name_col and len(non_geom_cols) > 0:
-        name_col = non_geom_cols[0]
-    if not code_col and len(non_geom_cols) > 1:
-        code_col = non_geom_cols[1]
+st.title("🎉 Debut Table Finder")
 
-    return barangays, name_col, code_col
+# Search input
+search_name = st.text_input("Enter your name:")
 
-st.title("📍 Barangay Code Finder from CSV")
-
-uploaded_file = st.file_uploader("Upload a CSV file with Latitude and Longitude", type=["csv"])
-
-if uploaded_file:
-    # Load CSV
-    df = pd.read_csv(uploaded_file)
-    st.write("✅ Uploaded Data Preview:", df.head())
-
-    # Check required columns
-    if {"latitude", "longitude"}.issubset(df.columns):
-        barangays, name_col, code_col = load_barangays()
-
-        # Convert CSV points to GeoDataFrame
-        gdf_points = gpd.GeoDataFrame(
-            df,
-            geometry=[Point(xy) for xy in zip(df["longitude"], df["latitude"])],
-            crs="EPSG:4326"
-        )
-
-        # Spatial join
-        joined = gpd.sjoin(gdf_points, barangays, how="left", predicate="within")
-
-        # Assign barangay info
-        df["barangay_name"] = joined[name_col]
-        df["barangay_code"] = joined[code_col]
-
-        st.success("Barangay codes added ✅")
-        st.write(df.head())
-
-        # Download button
-        st.download_button(
-            label="⬇ Download CSV with Barangay Codes",
-            data=df.to_csv(index=False).encode("utf-8"),
-            file_name="barangay_results.csv",
-            mime="text/csv"
-        )
-
-        st.info(f"Detected columns → Barangay Name: `{name_col}`, Barangay Code: `{code_col}`")
-
+if search_name:
+    # Case-insensitive partial match
+    results = df[df["name"].str.contains(search_name, case=False, na=False)]
+    
+    if not results.empty:
+        for _, row in results.iterrows():
+            st.success(f"Hello **{row['name']}**, your table number is **{row['table']}** 🎂")
     else:
-        st.error("❌ CSV must have 'latitude' and 'longitude' columns")
+        st.warning("No match found. Please check your spelling.")
