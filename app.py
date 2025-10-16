@@ -1,40 +1,44 @@
-import requests
-import pandas as pd
+import geopandas as gpd
+from shapely.geometry import Point
 import streamlit as st
 
-psgc = pd.read_csv("psgc_barangays.csv")
+# --- Load barangay shapefile or geojson ---
+@st.cache_data
+def load_barangays(path="barangays.geojson"):
+    try:
+        barangays = gpd.read_file(path)
+        # Ensure coordinate reference system is WGS84
+        if barangays.crs is None or barangays.crs.to_string() != "EPSG:4326":
+            barangays = barangays.to_crs(epsg=4326)
+        return barangays
+    except Exception as e:
+        st.error(f"Error loading barangay data: {e}")
+        return None
 
-def get_barangay_code(lat, lon, api_key):
-    url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lon}&key={api_key}"
-    res = requests.get(url).json()
 
-    # Debug output to inspect what we got
-    st.write("Raw API response:", res)
+def get_barangay_code(lat: float, lon: float, barangays: gpd.GeoDataFrame):
+    """
+    Given a latitude and longitude, return the barangay name and PSGC code.
+    """
+    if barangays is None or barangays.empty:
+        return {"error": "Barangay shapefile not loaded or empty."}
 
-    # Defensive check — make sure keys exist
-    if res.get('status') != 'OK':
-        return {"error": f"API returned status: {res.get('status')}"}
-
-    components = res['results'][0].get('address_components', [])
-    brgy, city, province = None, None, None
-
-    for c in components:
-        types = c.get('types', [])
-        if "sublocality_level_1" in types:
-            brgy = c.get('long_name')
-        elif "locality" in types:
-            city = c.get('long_name')
-        elif "administrative_area_level_2" in types:
-            province = c.get('long_name')
-
-    if not brgy:
-        return {"error": "Barangay not found in address components."}
-
-    match = psgc[
-        (psgc['Barangay'].str.contains(brgy, case=False, na=False)) &
-        (psgc['Municipality'].str.contains(city or "", case=False, na=False))
-    ]
-
-    if not match.empty:
-        return match.iloc[0].to_dict()
-    return {"error": "Barangay not found in PSGC table."}
+    try:
+        point = Point(lon, lat)
+        match = barangays[barangays.contains(point)]
+        if not match.empty:
+            result = match.iloc[0]
+            brgy_name = result.get("BRGY_NAME", "Unknown Barangay")
+            psgc_code = result.get("PSGC_CODE", "Unknown Code")
+            city_name = result.get("MUN_NAME", "Unknown Municipality")
+            province_name = result.get("PROV_NAME", "Unknown Province")
+            return {
+                "Barangay": brgy_name,
+                "Municipality": city_name,
+                "Province": province_name,
+                "PSGC_Code": psgc_code
+            }
+        else:
+            return {"error": "No barangay found for this location."}
+    except Exception as e:
+        return {"error": f"Error determining barangay: {e}"}
