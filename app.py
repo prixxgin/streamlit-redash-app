@@ -1,28 +1,17 @@
-import streamlit as st
-import pandas as pd
+import geopandas as gpd
+from shapely.geometry import Point
 
-# Sample guest list
-guests = [
-    {"name": "BLESILDA LUMAQUE ", "table": 1},
-    {"name": "MARK ANGELO LUMAQUE", "table": 1},
-    {"name": "MARVIE LUMAQUE", "table": 1},
-    {"name": "MITCHELL  SUAREZ", "table": 1},
-    {"name": "SOFIA GABRIEL SUAREZ", "table": 1},
-]
+# Load barangay shapefile (download from PhilGIS or PSA)
+barangays = gpd.read_file("barangays.geojson")  # or .shp
 
-df = pd.DataFrame(guests)
+def get_barangay_code(lat, lon):
+    point = Point(lon, lat)
+    match = barangays[barangays.contains(point)]
+    if not match.empty:
+        name = match.iloc[0]['BRGY_NAME']
+        code = match.iloc[0]['PSGC_CODE']
+        return {"barangay": name, "code": code}
+    return None
 
-st.title("🎉 Debut Table Finder")
-
-# Search input
-search_name = st.text_input("Enter your name:")
-
-if search_name:
-    # Case-insensitive partial match
-    results = df[df["name"].str.contains(search_name, case=False, na=False)]
-    
-    if not results.empty:
-        for _, row in results.iterrows():
-            st.success(f"Hello **{row['name']}**, your table number is **{row['table']}** 🎂")
-    else:
-        st.warning("No match found. Please check your spelling.")
+# Example
+print(get_barangay_code(14.5995, 120.9842))  # e.g. Manila
